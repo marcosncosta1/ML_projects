@@ -1,0 +1,58 @@
+########################
+# OS / Editor files
+########################
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+
+########################
+# Python
+########################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.venv/
+venv/
+env/
+ENV/
+
+########################
+# Jupyter / notebooks
+########################
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+########################
+# Build / packaging
+########################
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+########################
+# Data / models (adjust as needed)
+########################
+data/
+datasets/
+models/
+checkpoints/
+logs/
+outputs/
+
+########################
+# Environment / secrets
+########################
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
