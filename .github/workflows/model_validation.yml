@@ -1,0 +1,84 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Workflow: model_validation.yml
+# Trigger: manual dispatch ("Run workflow" button in GitHub UI)
+#          OR when a pkl/pt model file is pushed to main
+#
+# What it does:
+#   Loads the trained gesture classifier model and checks that it:
+#     1. Can be deserialised without errors
+#     2. Predicts all 10 classes (not degenerate / collapsed)
+#     3. Achieves >= 70% accuracy on a held-out synthetic test set
+#
+# Why this matters:
+#   In production ML, you never deploy a model without automated validation.
+#   This workflow is the CI equivalent of an eval gate — the model must pass
+#   before it can be considered "deployable".
+#
+# Learning notes:
+#   'workflow_dispatch' adds a "Run workflow" button to the Actions tab.
+#   'paths' filter only triggers the workflow when specific files change —
+#   here, only when a new model file is committed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Model Validation
+
+on:
+  workflow_dispatch:  # manual trigger from the GitHub UI
+    inputs:
+      min_accuracy:
+        description: "Minimum acceptable accuracy (0.0 – 1.0)"
+        required: false
+        default: "0.70"
+
+  push:
+    branches: [main]
+    paths:
+      - "01_realtime_hand_gesture_classifier/models/*.pkl"
+      - "01_realtime_hand_gesture_classifier/models/*.pt"
+
+jobs:
+  validate-gesture-model:
+    name: Validate gesture classifier
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-gesture-${{ hashFiles('01_realtime_hand_gesture_classifier/requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r 01_realtime_hand_gesture_classifier/requirements.txt
+          pip install pytest
+
+      # ── Run model validation script ───────────────────────────────────────
+      # This calls the validate_model.py script in the project.
+      # The script exits with code 1 if validation fails, which makes this
+      # step (and the whole workflow) fail — exactly what we want.
+      - name: Validate model
+        working-directory: 01_realtime_hand_gesture_classifier
+        env:
+          MIN_ACCURACY: ${{ github.event.inputs.min_accuracy || '0.70' }}
+        run: python scripts/validate_model.py --min-accuracy "$MIN_ACCURACY"
+
+      # ── Post result as a summary ──────────────────────────────────────────
+      # $GITHUB_STEP_SUMMARY is a special file — anything written to it
+      # appears as a formatted summary on the workflow run page.
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Model Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Project: Hand Gesture Classifier" >> $GITHUB_STEP_SUMMARY
+          echo "- Min accuracy threshold: ${{ github.event.inputs.min_accuracy || '0.70' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

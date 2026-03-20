@@ -1,0 +1,79 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Workflow: dependency_audit.yml
+# Trigger: weekly on Monday at 08:00 UTC, or manual
+#
+# What it does:
+#   Scans all requirements.txt files for packages with known CVEs (security
+#   vulnerabilities) using pip-audit. Also checks for outdated packages.
+#
+# Why this matters:
+#   ML projects accumulate many transitive dependencies (torch alone pulls in
+#   dozens). Automated weekly audits catch supply-chain issues before they
+#   affect users of your deployed demos.
+#
+# Learning notes:
+#   'schedule' uses cron syntax:  minute  hour  day  month  weekday
+#                                    0      8     *     *      1
+#   Cron runs in UTC. Monday = 1, Sunday = 0.
+#   'pip-audit' is from PyPA (the Python Packaging Authority) — it checks
+#   the OSV (Open Source Vulnerabilities) database.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Dependency Audit
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"   # every Monday at 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: pip-audit ${{ matrix.project }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - 01_realtime_hand_gesture_classifier
+          - 03_few_shot_image_classifier
+          - 04_anomaly_detection_timeseries
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      # ── Audit this project's requirements ─────────────────────────────────
+      # '--require-hashes' would be even stricter (pins exact file hashes)
+      # but is overkill for a portfolio project.
+      # '--output json' produces machine-readable output for dashboards.
+      - name: Audit ${{ matrix.project }}
+        run: |
+          echo "## Auditing ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
+          pip-audit \
+            --requirement ${{ matrix.project }}/requirements.txt \
+            --output json \
+            --format json \
+            > audit-${{ matrix.project }}.json || true
+          # 'true' prevents the step from failing so we can still upload results;
+          # a real CI pipeline would remove '|| true' to block on vulnerabilities
+
+          # Human-readable output to the log
+          pip-audit \
+            --requirement ${{ matrix.project }}/requirements.txt \
+            2>&1 | tee -a $GITHUB_STEP_SUMMARY
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-${{ matrix.project }}
+          path: audit-${{ matrix.project }}.json

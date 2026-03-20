@@ -1,0 +1,94 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Workflow: test.yml
+# Trigger: push/PR to main or develop
+#
+# What it does:
+#   Runs the test suite for each project using pytest.
+#   Uses a dependency cache so subsequent runs are much faster
+#   (only re-installs if requirements.txt changes).
+#
+# Learning notes:
+#   - 'matrix' strategy runs the same job for multiple values in parallel.
+#     Here: one job per project, all running simultaneously.
+#   - 'cache' stores pip's download cache between runs (~2 min saved per run).
+#   - 'continue-on-error' lets other projects keep testing even if one fails.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Test ${{ matrix.project }}
+    runs-on: ubuntu-latest
+
+    # Matrix strategy: GitHub spins up one parallel job per project.
+    # Each job gets its own clean runner with the project's own requirements.
+    strategy:
+      fail-fast: false   # if project A fails, still test B and C
+      matrix:
+        include:
+          - project: 01_realtime_hand_gesture_classifier
+            python: "3.11"
+          - project: 03_few_shot_image_classifier
+            python: "3.11"
+          - project: 04_anomaly_detection_timeseries
+            python: "3.11"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # ── Dependency caching ────────────────────────────────────────────────
+      # The cache key includes the requirements file contents (via hashFiles).
+      # If requirements.txt hasn't changed since the last run, GitHub restores
+      # the cached packages instead of re-downloading them from PyPI.
+      # This turns a 3-minute install into a 10-second restore.
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.project }}-${{ hashFiles(format('{0}/requirements.txt', matrix.project)) }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.project }}-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          # Install the project's own requirements
+          # --no-deps on heavy ML packages keeps CI fast;
+          # for full integration tests, remove this flag
+          pip install -r ${{ matrix.project }}/requirements.txt
+
+      # ── Run tests ─────────────────────────────────────────────────────────
+      # pytest discovers test files matching test_*.py or *_test.py
+      # --cov generates a coverage report showing which lines were executed
+      - name: Run tests
+        run: |
+          pytest ${{ matrix.project }}/tests/ \
+            --cov=${{ matrix.project }} \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-${{ matrix.project }}.xml \
+            -v
+        # -v = verbose: shows each test name and pass/fail individually
+
+      # ── Upload coverage report ────────────────────────────────────────────
+      # Artifacts are files you can download from the GitHub Actions UI
+      # after a run. Useful for reviewing coverage reports locally.
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()   # upload even if tests failed — useful for debugging
+        with:
+          name: coverage-${{ matrix.project }}
+          path: coverage-${{ matrix.project }}.xml

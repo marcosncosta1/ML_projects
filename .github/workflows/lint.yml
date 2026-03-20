@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Workflow: lint.yml
+# Trigger: every push and every pull request (any branch)
+#
+# What it does:
+#   Runs ruff (fast Python linter) across every project.
+#   Catches syntax errors, unused imports, undefined names, and style issues
+#   before they ever reach main.
+#
+# Why this matters for your portfolio:
+#   Recruiters and collaborators clone your repo and run your code.
+#   A green lint badge = professional signal that the code is clean.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Lint
+
+on:
+  push:          # run on every push to any branch
+  pull_request:  # run on every PR
+
+jobs:
+  lint:
+    name: ruff lint
+    runs-on: ubuntu-latest   # GitHub-hosted runner — free for public repos
+
+    steps:
+      # ── Step 1: Check out the repo code ──────────────────────────────────
+      # This clones your repo into the runner's filesystem.
+      # 'actions/checkout' is an official GitHub Action from the marketplace.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Step 2: Set up Python ─────────────────────────────────────────────
+      # Installs the specified Python version on the runner.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ── Step 3: Install ruff ──────────────────────────────────────────────
+      # ruff is a Rust-based linter that replaces flake8/pyflakes/isort.
+      # It's 10-100x faster and covers more rules.
+      - name: Install ruff
+        run: pip install ruff
+
+      # ── Step 4: Run ruff on every project ────────────────────────────────
+      # '--select E,F,W' = errors, pyflakes (undefined names etc), warnings
+      # '--ignore E501'  = ignore line-too-long (common in ML notebooks)
+      - name: Lint all projects
+        run: |
+          ruff check \
+            01_realtime_hand_gesture_classifier/ \
+            03_few_shot_image_classifier/ \
+            04_anomaly_detection_timeseries/ \
+            --select E,F,W \
+            --ignore E501,E402 \
+            --output-format=github
+        # '--output-format=github' makes ruff annotate errors directly on the
+        # diff in GitHub's PR review UI — very useful for code review

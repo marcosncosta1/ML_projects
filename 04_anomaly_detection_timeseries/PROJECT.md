@@ -41,11 +41,11 @@ Machine Learning / Unsupervised Learning / Industry Applications
 - Interactive visualization makes results tangible
 
 ## Milestones
-- [ ] Data loading + preprocessing pipeline
-- [ ] Isolation Forest baseline
-- [ ] VAE implementation + training
-- [ ] Streamlit dashboard with interactive plots
-- [ ] README with dataset description and method comparison
+- [x] Data loading + preprocessing pipeline
+- [x] Isolation Forest baseline
+- [x] VAE implementation + training
+- [x] Streamlit dashboard with interactive plots
+- [x] README with dataset description and method comparison
 
 ## Notes
 <!-- Add implementation notes, decisions, and progress here -->

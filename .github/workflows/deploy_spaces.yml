@@ -1,0 +1,73 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Workflow: deploy_spaces.yml
+# Trigger: push to main that touches the few-shot classifier project
+#
+# What it does:
+#   Syncs the 03_few_shot_image_classifier/ folder to a HuggingFace Space
+#   so the live demo is always up to date with main.
+#
+# Prerequisites (one-time setup):
+#   1. Create a Space at huggingface.co/spaces — pick Gradio as the SDK
+#   2. Generate a HuggingFace token with write access:
+#      huggingface.co → Settings → Access Tokens → New token (write)
+#   3. Add it as a GitHub secret:
+#      GitHub repo → Settings → Secrets → Actions → New secret
+#      Name: HF_TOKEN   Value: hf_xxxxxxxxxxxx
+#
+# Learning notes:
+#   'secrets.HF_TOKEN' reads from your repo's encrypted secrets store.
+#   Never hardcode tokens in workflow files — they'd be public.
+#   The huggingface_hub CLI handles the git push to HF's infrastructure.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy to HuggingFace Spaces
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "03_few_shot_image_classifier/**"
+
+  workflow_dispatch:  # also allow manual deploys
+
+jobs:
+  deploy:
+    name: Push to HF Spaces
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for git operations
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install huggingface_hub CLI
+        run: pip install huggingface_hub
+
+      # ── Upload project folder to HF Space ─────────────────────────────────
+      # huggingface-cli upload pushes the local folder to your Space's repo.
+      # The Space auto-rebuilds its Docker container and relaunches the app.
+      - name: Deploy to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          huggingface-cli upload \
+            YOUR_USERNAME/few-shot-classifier \
+            03_few_shot_image_classifier/ \
+            . \
+            --repo-type space \
+            --token "$HF_TOKEN"
+        # Replace YOUR_USERNAME with your HuggingFace username
+        # Replace few-shot-classifier with your Space name
+
+      - name: Write deployment summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployed **03_few_shot_image_classifier** to HuggingFace Spaces" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: [\`${{ github.sha }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
